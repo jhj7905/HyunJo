@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 # --------------------------------------------------------
-# Faster R-CNN
+# Fast R-CNN
 # Copyright (c) 2015 Microsoft
 # Licensed under The MIT License [see LICENSE for details]
 # Written by Ross Girshick
@@ -12,7 +12,6 @@ Demo script showing detections in sample images.
 
 See README.md for installation instructions before running.
 """
-
 import _init_paths
 from fast_rcnn.config import cfg
 from fast_rcnn.test import im_detect
@@ -33,9 +32,8 @@ CLASSES = ('__background__',
 
 NETS = {'vgg16': ('VGG16',
                   'VGG16_faster_rcnn_final.caffemodel'),
-        'zf': ('ZF',
-                  'ZF_faster_rcnn_final.caffemodel')}
-
+        'zf': ('zf',
+               'ZF_faster_rcnn_final.caffemodel')}
 
 def demo(net, im, scale_factor, classes):
     """Detect object classes in an image using pre-computed object proposals."""
@@ -62,8 +60,17 @@ def demo(net, im, scale_factor, classes):
                           cls_scores[:, np.newaxis])).astype(np.float32)
         keep = nms(dets, NMS_THRESH)
         dets = dets[keep, :]
-       # vis_detections(im, cls, dets, thresh=CONF_THRESH)
-       return [im2, cls, dets, CONF_THRESH]  #cls or cls_ind
+        inds = np.where(dets[:, -1] >= CONF_THRESH)[0]
+        if len(inds) != 0:
+            for i in inds:
+                bbox = dets[i, :4]
+                cv2.rectangle(frame,(int(bbox[0]*scale_factor),int(bbox[1]*scale_factor)),(int(bbox[2]*scale_factor),int(bbox[3]*scale_factor)),(0,255,0),2)
+        # Display the resulting frame
+        cv2.imshow('frame',frame)
+        if cv2.waitKey(1) & 0xFF == ord('q'):
+            break
+
+
 
 def parse_args():
     """Parse input arguments."""
@@ -106,29 +113,18 @@ if __name__ == '__main__':
     
     #############################Modified by Jung
     cap = cv2.VideoCapture(0) 
- while(True):
+    while True:
         # Capture frame-by-frame
         ret, frame = cap.read()
         # Scaling the video feed can help the system run faster (and run on GPUs with less memory)
         # e.g. with a standard video stream of size 640x480, a scale_factor = 4 will allow the system to run a < 1 sec/frame
         scale_factor = 1
         # 4-> 1
-        [im2, cls, dets, CONF_THRESH] = demo(net, frame, scale_factor, ('person',))
-
-        inds = np.where(dets[:, -1] >= CONF_THRESH)[0]
-        if len(inds) != 0:
-            for i in inds:
-                bbox = dets[i, :4]
-                cv2.rectangle(frame,(int(bbox[0]*scale_factor),int(bbox[1]*scale_factor)),(int(bbox[2]*scale_factor),int(bbox[3]*scale_factor)),(0,255,0),2)
-
-        # Display the resulting frame
-        cv2.imshow('frame',frame)
-
-        if cv2.waitKey(1) & 0xFF == ord('q'):
-            break
-
+        demo(net, frame, scale_factor, ('person',))
     # When everything done, release the capture
+
     cap.release()
     cv2.destroyAllWindows()
     ##########################################################################
- 
+
+
