@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 # --------------------------------------------------------
-# Fast R-CNN
+# Faster R-CNN
 # Copyright (c) 2015 Microsoft
 # Licensed under The MIT License [see LICENSE for details]
 # Written by Ross Girshick
@@ -12,6 +12,7 @@ Demo script showing detections in sample images.
 
 See README.md for installation instructions before running.
 """
+
 import _init_paths
 from fast_rcnn.config import cfg
 from fast_rcnn.test import im_detect
@@ -32,19 +33,53 @@ CLASSES = ('__background__',
 
 NETS = {'vgg16': ('VGG16',
                   'VGG16_faster_rcnn_final.caffemodel'),
-        'zf': ('zf',
-               'ZF_faster_rcnn_final.caffemodel')}
+        'zf': ('ZF',
+                  'ZF_faster_rcnn_final.caffemodel')}
 
-def demo(net, im, scale_factor, classes):
+
+def vis_detections(im, class_name, dets, thresh=0.5):
+    """Draw detected bounding boxes."""
+    inds = np.where(dets[:, -1] >= thresh)[0]
+    if len(inds) == 0:
+        return
+
+    im = im[:, :, (2, 1, 0)]
+    fig, ax = plt.subplots(figsize=(12, 12))
+    ax.imshow(im, aspect='equal')
+    for i in inds:
+        bbox = dets[i, :4]
+        score = dets[i, -1]
+
+        ax.add_patch(
+            plt.Rectangle((bbox[0], bbox[1]),
+                          bbox[2] - bbox[0],
+                          bbox[3] - bbox[1], fill=False,
+                          edgecolor='red', linewidth=3.5)
+            )
+        ax.text(bbox[0], bbox[1] - 2,
+                '{:s} {:.3f}'.format(class_name, score),
+                bbox=dict(facecolor='blue', alpha=0.5),
+                fontsize=14, color='white')
+
+    ax.set_title(('{} detections with '
+                  'p({} | box) >= {:.1f}').format(class_name, class_name,
+                                                  thresh),
+                  fontsize=14)
+    plt.axis('off')
+    plt.tight_layout()
+    plt.draw()
+   
+
+def demo(net, frame, scale_factor):
     """Detect object classes in an image using pre-computed object proposals."""
 
-
-    im2 = cv2.resize(im, (0,0), fx=1.0/scale_factor, fy=1.0/scale_factor)
+    # Load the demo image
+    im = cv2.resize(frame, (0,0), fx=1.0/scale_factor, fy=1.0/scale_factor)
 
     # Detect all object classes and regress object bounds
     timer = Timer()
     timer.tic()
-    scores, boxes = im_detect(net, im2)
+    scores, boxes = im_detect(net, im)
     timer.toc()
     print ('Detection took {:.3f}s for '
            '{:d} object proposals').format(timer.total_time, boxes.shape[0])
@@ -60,17 +95,9 @@ def demo(net, im, scale_factor, classes):
                           cls_scores[:, np.newaxis])).astype(np.float32)
         keep = nms(dets, NMS_THRESH)
         dets = dets[keep, :]
-        inds = np.where(dets[:, -1] >= CONF_THRESH)[0]
-        if len(inds) != 0:
-            for i in inds:
-                bbox = dets[i, :4]
-                cv2.rectangle(frame,(int(bbox[0]*scale_factor),int(bbox[1]*scale_factor)),(int(bbox[2]*scale_factor),int(bbox[3]*scale_factor)),(0,255,0),2)
-        # Display the resulting frame
-        cv2.imshow('frame',frame)
-        if cv2.waitKey(1) & 0xFF == ord('q'):
-            break
 
-
+    return [im, cls, dets, CONF_THRESH]
+    
 
 def parse_args():
     """Parse input arguments."""
@@ -109,22 +136,24 @@ if __name__ == '__main__':
         cfg.GPU_ID = args.gpu_id
     net = caffe.Net(prototxt, caffemodel, caffe.TEST)
 
-    #print '\n\nLoaded network {:s}'.format(caffemodel)
-    
-    #############################Modified by Jung
     cap = cv2.VideoCapture(0) 
     while True:
-        # Capture frame-by-frame
         ret, frame = cap.read()
-        # Scaling the video feed can help the system run faster (and run on GPUs with less memory)
-        # e.g. with a standard video stream of size 640x480, a scale_factor = 4 will allow the system to run a < 1 sec/frame
         scale_factor = 1
-        # 4-> 1
-        demo(net, frame, scale_factor, ('person',))
-    # When everything done, release the capture
+        [im2, cls, dets, CONF_THRESH] = demo(net, frame, scale_factor)
+        inds = np.where(dets[:, -1] >= CONF_THRESH)[0]
+        if len(inds) != 0:
+            for i in inds:
+                bbox = dets[i, :4]
+                cv2.rectangle(frame,(int(bbox[0]*scale_factor),int(bbox[1]*scale_factor)),(int(bbox[2]*scale_factor),int(bbox[3]*scale_factor)),(0,255,0),2)
 
+        # Display the resulting frame
+        cv2.imshow('frame',frame)
+        if cv2.waitKey(1) & 0xFF == ord('q'):
+            break 
+
+        
     cap.release()
     cv2.destroyAllWindows()
-    ##########################################################################
 
 
